@@ -1,0 +1,11 @@
+verbosity=1
+bootlogo=false
+fdtfile=rockchip/rk3399-gea8319.dtb
+rootdev=UUID=ffffab2f-dde3-45f1-88a6-69dfe2a62367
+rootfstype=btrfs
+rootflags=compress=zstd:1
+overlay_prefix=rk3399
+overlays=
+extraargs=rw rootwait
+extraboardargs=net.ifnames=0 max_loop=128
+docker_optimizations=on
