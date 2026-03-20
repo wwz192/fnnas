@@ -1,4 +1,5 @@
-##先生成gea-6319的镜像，然后更换DTB和extlinux.conf，然后刷机成功
+##多轮尝试和修改设备树后，先生成gea-6319的镜像，然后更换DTB和extlinux.conf，刷机成功。
+##loader地址0x00000040 System地址0x00000000
 
 
 
