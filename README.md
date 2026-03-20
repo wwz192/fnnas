@@ -1,3 +1,10 @@
+##先生成gea-6319的镜像，然后更换DTB和extlinux.conf，然后刷机成功
+
+
+
+
+
+
 <div align="center">
     <img src="https://github.com/user-attachments/assets/ea86c39b-4ed6-4f14-b7e6-bc551b495e39" alt="FnNAS" />
 </div>
