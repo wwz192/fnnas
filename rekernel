@@ -54,8 +54,8 @@ debs_repo="https://github.com/ophub/fnnas"
 debs_install="none"
 # Whether to download and use DTB files (true/yes)
 dtbs_install="true"
-# Kernel DTB version to download (e.g., 6.12.y)
-dtbs_version="6.12.y"
+# Kernel DTB version to download (e.g., 6.18.y)
+dtbs_version="6.18.y"
 
 # Server information
 arch_info="$(uname -m)"
@@ -89,19 +89,18 @@ mount_try() {
         error_msg "Missing mount parameters: [ ${m_dev}, ${m_target} ]"
     }
 
-    local t="1"
-    local max_try="10"
+    local t=1
+    local max_try=10
     while [[ "${t}" -le "${max_try}" ]]; do
-        mount "${m_dev}" "${m_target}"
-        if [[ "${?}" -eq "0" ]]; then
-            break
-        else
-            sync && sleep 3
-            umount "${m_target}" 2>/dev/null
-            ((t++))
+        if mount "${m_dev}" "${m_target}"; then
+            return 0
         fi
+        sync && sleep 3
+        # Lazy unmount in case the previous attempt left a stale mount.
+        umount -l "${m_target}" 2>/dev/null || true
+        ((t++))
     done
-    [[ "${t}" -gt "${max_try}" ]] && error_msg "Failed to mount after [ ${t} ] attempts."
+    error_msg "Failed to mount [ ${m_dev} ] on [ ${m_target} ] after [ ${max_try} ] attempts."
 }
 
 init_var() {
@@ -157,7 +156,7 @@ init_var() {
     [[ "${debs_repo}" =~ ^https: ]] && debs_repo="$(echo ${debs_repo} | awk -F'/' '{print $4"/"$5}')"
     kernel_api="https://github.com/${debs_repo}"
 
-    # Identify the kernel <VERSION> and <PATCHLEVEL>, such as [ 6.12 ]
+    # Identify the kernel <VERSION> and <PATCHLEVEL>, such as [ 6.18 ]
     kernel_verpatch="$(echo ${dtbs_version} | awk -F '.' '{print $1"."$2}')"
 }
 
@@ -172,7 +171,7 @@ download_debs() {
 
     cd "${current_path}"
 
-    # Get the latest version from github releases(e.g: 6.12.41)
+    # Get the latest version from github releases(e.g: 6.18.18)
     latest_version="$(
         curl -fsSL \
             ${kernel_api}/releases/expanded_assets/fnnas_debs |
@@ -188,16 +187,20 @@ download_debs() {
 
     # Download the kernel deb packages (retry up to 10 times on failure)
     echo -e "${INFO} Downloading kernel deb packages from: [ ${debs_down_from} ]"
+    local _curl_ok=0
     for t in {1..10}; do
-        curl -fsSL "${debs_down_from}" -o "${tmp_debs_path}/${latest_version}.tar.gz"
-        [[ "${?}" -eq 0 ]] && break || sleep 60
+        if curl -fsSL "${debs_down_from}" -o "${tmp_debs_path}/${latest_version}.tar.gz"; then
+            _curl_ok=1
+            break
+        fi
+        sleep 60
     done
-    [[ "${?}" -eq 0 ]] || error_msg "Failed to download kernel deb packages from github.com."
+    [[ "${_curl_ok}" -eq 1 ]] || error_msg "Failed to download kernel deb packages from github.com."
 
     # Extract the downloaded deb packages
     echo -e "${INFO} Extracting kernel deb packages..."
-    tar -xzf "${tmp_debs_path}/${latest_version}.tar.gz" -C "${fnnas_debs}/"
-    [[ "${?}" -ne 0 ]] && error_msg "Failed to extract kernel deb packages."
+    tar -xzf "${tmp_debs_path}/${latest_version}.tar.gz" -C "${fnnas_debs}/" ||
+        error_msg "Failed to extract kernel deb packages."
     echo -e "${INFO} Kernel deb packages extracted to [ ${fnnas_debs} ]"
 
     # Cleanup temporary download directory
@@ -222,7 +225,7 @@ download_dtbs() {
 
     cd "${current_path}"
 
-    # Get the latest version from github releases(e.g: 6.12.41)
+    # Get the latest version from github releases(e.g: 6.18.33)
     latest_version="$(
         curl -fsSL \
             https://github.com/ophub/kernel/releases/expanded_assets/kernel_stable |
@@ -239,22 +242,26 @@ download_dtbs() {
 
     # Download the kernel DTB files (retry up to 10 times on failure)
     echo -e "${INFO} Downloading kernel DTB files from: [ ${dtbs_down_from} ]"
+    local _curl_ok=0
     for t in {1..10}; do
-        curl -fsSL "${dtbs_down_from}" -o "${tmp_dtbs_path}/${latest_version}.tar.gz"
-        [[ "${?}" -eq 0 ]] && break || sleep 60
+        if curl -fsSL "${dtbs_down_from}" -o "${tmp_dtbs_path}/${latest_version}.tar.gz"; then
+            _curl_ok=1
+            break
+        fi
+        sleep 60
     done
-    [[ "${?}" -eq 0 ]] || error_msg "Failed to download kernel DTB files from github.com."
+    [[ "${_curl_ok}" -eq 1 ]] || error_msg "Failed to download kernel DTB files from github.com."
 
     # Extract the downloaded DTB files
     echo -e "${INFO} Extracting kernel DTB files..."
-    tar -xzf "${tmp_dtbs_path}/${latest_version}.tar.gz" -C "${tmp_dtbs_path}/"
-    [[ "${?}" -ne 0 ]] && error_msg "Failed to extract kernel DTB files."
+    tar -xzf "${tmp_dtbs_path}/${latest_version}.tar.gz" -C "${tmp_dtbs_path}/" ||
+        error_msg "Failed to extract kernel DTB files."
     echo -e "${INFO} Kernel DTB files extracted to [ ${tmp_dtbs_path} ]"
 
     # Extract individual platform dtbs
-    tar -xzf ${tmp_dtbs_path}/${latest_version}/dtb-amlogic-${latest_version}*.tar.gz -C "${tmp_dtbs_path}/amlogic/"
-    tar -xzf ${tmp_dtbs_path}/${latest_version}/dtb-allwinner-${latest_version}*.tar.gz -C "${tmp_dtbs_path}/allwinner/"
-    tar -xzf ${tmp_dtbs_path}/${latest_version}/dtb-rockchip-${latest_version}*.tar.gz -C "${tmp_dtbs_path}/rockchip/"
+    tar -xzf "${tmp_dtbs_path}/${latest_version}"/dtb-amlogic-${latest_version}*.tar.gz -C "${tmp_dtbs_path}/amlogic/"
+    tar -xzf "${tmp_dtbs_path}/${latest_version}"/dtb-allwinner-${latest_version}*.tar.gz -C "${tmp_dtbs_path}/allwinner/"
+    tar -xzf "${tmp_dtbs_path}/${latest_version}"/dtb-rockchip-${latest_version}*.tar.gz -C "${tmp_dtbs_path}/rockchip/"
     cp -af "${tmp_dtbs_path}"/{allwinner,amlogic,rockchip} "${fnnas_dtbs}/"
     echo -e "${INFO} Kernel DTB files organized to [ ${fnnas_dtbs} ]"
 
@@ -326,9 +333,9 @@ unmount_fnnas() {
     fi
 
     # Cleanup temp directory
-    rm -f ${tmp_fnnas}/root/chroot_fnnas.sh
-    rm -f ${tmp_fnnas}/root/*.deb
-    rm -rf ${tmp_path}
+    rm -f "${tmp_fnnas}/root/chroot_fnnas.sh"
+    rm -f "${tmp_fnnas}/root/"*.deb
+    [[ -n "${tmp_path}" ]] && rm -rf "${tmp_path}"
     echo -e "${INFO} Temporary files cleaned up."
 
     sync && sleep 3
@@ -338,10 +345,46 @@ chroot_fnnas() {
     cd "${current_path}"
     echo -e "${STEPS} Preparing chroot environment..."
 
-    # Copy QEMU static binary for ARM64 emulation on x86_64 hosts
+    # Configure QEMU user emulation on x86_64 host
     if [[ "${arch_info}" == "x86_64" ]]; then
+        # Ensure binfmt_misc is mounted
+        if ! mountpoint -q /proc/sys/fs/binfmt_misc 2>/dev/null; then
+            modprobe binfmt_misc 2>/dev/null || true
+            mount -t binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc 2>/dev/null || true
+        fi
+
+        # Install qemu-user-static if the binary is missing
+        if [[ ! -f "/usr/bin/${qemu_binary_arm64}" ]]; then
+            echo -e "${NOTE} [ ${qemu_binary_arm64} ] not found, installing qemu-user-static..."
+            if command -v apt-get &>/dev/null; then
+                # Install qemu-user-static package
+                {
+                    DEBIAN_FRONTEND=noninteractive apt-get update -yq &&
+                        DEBIAN_FRONTEND=noninteractive apt-get install -yq --no-install-recommends qemu-user-static
+                } 2>/dev/null ||
+                    echo -e "${WARNING} Failed to install qemu-user-static via apt-get."
+            else
+                echo -e "${WARNING} Package manager not recognized. Please install qemu-user-static manually."
+            fi
+        fi
+
+        # Register ARM64 interpreter with binfmt_misc if not already registered
+        if [[ ! -f "/proc/sys/fs/binfmt_misc/qemu-aarch64" && ! -f "/proc/sys/fs/binfmt_misc/qemu-arm64" ]]; then
+            echo -e "${INFO} Registering [ ${qemu_binary_arm64} ] with binfmt_misc..."
+            if [[ -f "/proc/sys/fs/binfmt_misc/register" ]]; then
+                # The F flag makes the interpreter path fixed, so it works inside chroot too
+                echo ':qemu-aarch64:M:0:\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\xb7\x00:\xff\xff\xff\xff\xff\xff\xff\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff\xff:/usr/bin/qemu-aarch64-static:F' \
+                    >/proc/sys/fs/binfmt_misc/register 2>/dev/null ||
+                    error_msg "Failed to register qemu-aarch64 interpreter with binfmt_misc."
+            else
+                error_msg "binfmt_misc is not available. Cannot register ARM64 interpreter."
+            fi
+        fi
+
+        # Copy QEMU static binary to chroot environment
         if [[ -f "/usr/bin/${qemu_binary_arm64}" ]]; then
             echo -e "${INFO} Copying [ ${qemu_binary_arm64} ] to chroot..."
+            mkdir -p "${tmp_fnnas}/usr/bin"
             cp -f "/usr/bin/${qemu_binary_arm64}" "${tmp_fnnas}/usr/bin/"
         else
             # Check if QEMU binary already exists in the image
@@ -461,7 +504,7 @@ chroot_fnnas() {
 
     # Final packaging
     cd "${current_path}"
-    rm -f ${out_path}/${kernel_out}.tar.gz
+    rm -f "${out_path}/${kernel_out}.tar.gz"
     tar -czf "${out_path}/${kernel_out}.tar.gz" -C "${out_path}" "${kernel_out}"
     rm -rf "${out_path}/${kernel_out}"
 }

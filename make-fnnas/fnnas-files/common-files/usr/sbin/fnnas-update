@@ -278,7 +278,7 @@ query_version() {
         # Using local kernel, no need to download from github.com
         kernel_kownload_required="no"
 
-        # Local kernel version comparison(boot-amlogic-6.12.41-trim.tar.gz -> 6.12.41-trim)
+        # Local kernel version comparison(boot-amlogic-6.18.18-trim.tar.gz -> 6.18.18-trim)
         local_kernel_version="$(echo ${try_boot} | sed 's/boot-[^-]*-\(.*\)\.tar\.gz/\1/')"
         echo -e "${INFO} Found the kernel in the current directory: [ ${local_kernel_version} ]"
 
@@ -310,7 +310,7 @@ query_version() {
 
         # Query the latest version
         echo -e "${INFO} Querying the latest kernel version of the [ ${kernel_verpatch} ] series within [ kernel_${KERNEL_TAGS} ]..."
-        # Get the latest version from github releases(e.g: 6.12.41)
+        # Get the latest version from github releases(e.g: 6.18.18)
         latest_version="$(
             curl -fsSL \
                 ${kernel_api}/releases/expanded_assets/kernel_${KERNEL_TAGS} |
@@ -331,7 +331,7 @@ download_kernel() {
     cd ${current_path}
     echo -e "${STEPS} Downloading kernel package..."
 
-    # Download the kernel from [ releases ], e.g: [ 6.12.41-amlogic.tar.gz ]
+    # Download the kernel from [ releases ], e.g: [ 6.18.18-amlogic.tar.gz ]
     kernel_down_from="https://github.com/${KERNEL_REPO}/releases/download/kernel_${KERNEL_TAGS}/${inputs_kernel}-${PLATFORM}.tar.gz"
 
     echo -e "${INFO} Download kernel from: [ ${kernel_down_from} ]"
@@ -506,8 +506,8 @@ update_kernel() {
     [[ "${PLATFORM}" == "amlogic" ]] && (cd /boot && cp -f uInitrd-${kernel_name} uInitrd && cp -f vmlinuz-${kernel_name} zImage)
     [[ "${PLATFORM}" == "rockchip" ]] && (cd /boot && ln -sf uInitrd-${kernel_name} uInitrd && ln -sf vmlinuz-${kernel_name} Image)
     [[ "${PLATFORM}" == "allwinner" ]] && (cd /boot && cp -f uInitrd-${kernel_name} uInitrd && cp -f vmlinuz-${kernel_name} Image)
-    # wxy-oect: MODEL_ID numbers r304 and r306, require special handling of uInitrd
-    [[ "${MODEL_ID}" =~ ^(r304|r306)$ ]] && (cd /boot && ln -sf initrd.img-${kernel_name} uInitrd)
+    # wxy-oect: MODEL_ID numbers r306 and r307, require special handling of uInitrd
+    [[ "${MODEL_ID}" =~ ^(r306|r307)$ ]] && (cd /boot && ln -sf initrd.img-${kernel_name} uInitrd)
     [[ "$(ls /boot/*${kernel_name}* -l 2>/dev/null | grep "^-" | wc -l)" -ge "4" ]] || error_msg "The /boot files is missing."
     echo -e "${INFO} (1/4) Unpacking [ boot-${kernel_name}.tar.gz ] succeeded."
 
